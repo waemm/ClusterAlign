@@ -1,0 +1,20 @@
+QuickStart
+
+If you wish to start using this package, the following aligners are available for use: Bowtie, Blat, Shrimp, BWA and Soap. Please note: this is ONLY for 64-bit linux cluster machines.
+
+1.  Firstly untar the package in a directory using:
+
+tar –zxvf clusteralign_beta.tar.gz
+
+2.	The next step is to make the scripts necessary to run ClusterAlign. From the directory where you have extracted the package  (/path/to/clusteralign_v0.15/) run the command and follow all prompts to enter information regarding your cluster.
+
+/path/to/python/python cluster_align.py --makescripts
+
+
+3.	You can test alignment programs on the cluster. 
+/path/to/python/python cluster_align.py bowtie.config
+
+This will generate a directory called “test_output” in your aligner directory. 
+
+Note: BWA, BLAT, Shrimp and Bowtie can be tested in this way – to test soap you will need to create your own reference index as this is too large to include
+
