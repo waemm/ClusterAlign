@@ -14,7 +14,7 @@ pp= pprint.PrettyPrinter(indent=4)
 
 
 ########### Adding LSF support !!!
-cluster_type = "LSF"
+cluster_type = ""
 
 
 debug = True
@@ -666,7 +666,12 @@ def build_cluster_Script(node_aligner_part,node_unmapped_part,aligner_part,unmap
 	two_refs = False
 	# create a temporary directory for use
 	if diag != 1:
-		script_cmd='typeset -i newstr\nnewstr=$(cat /proc/meminfo | grep "MemFree" | sed "s/[^0-9]//g")\nif [ "$newstr" -lt "%s" ]; then\n\t exit\nelse\n\techo "its ok"\nfi\nif [ -d %s ]; then\n\tx=1\nelse\n\tmkdir %s\nfi\n'%((int(mem_for_job)/5)/1024,run_data["tmp_node_dir"],run_data["tmp_node_dir"])
+		
+		if run_master != True:
+			script_cmd='typeset -i newstr\nnewstr=$(cat /proc/meminfo | grep "MemFree" | sed "s/[^0-9]//g")\nif [ "$newstr" -lt "%s" ]; then\n\t exit\nelse\n\techo "its ok"\nfi\nif [ -d %s ]; then\n\tx=1\nelse\n\tmkdir %s\nfi\n'%((int(mem_for_job)/5)/1024,run_data["tmp_node_dir"],run_data["tmp_node_dir"])
+		else:
+			script_cmd='if [ -d %s ]; then\n\tx=1\nelse\n\tmkdir %s\nfi\n'%(run_data["tmp_node_dir"],run_data["tmp_node_dir"])
+			
 	else:
 		script_cmd=""
 		
@@ -1382,9 +1387,16 @@ def read_config_file(config_paths,aligner,paired,input_out,log_list,input_read1,
 			# CLUSTER DATA
 			#################         
 			    
-			elif line.strip().startswith("cluster_platform"):   
-				cluster_data[line.strip().split("=")[1].strip()] = {}
+			elif line.strip().startswith("cluster_type"):   
+				cluster_data[line.strip().split("=")[0].strip()] = line.strip().split("=")[1].strip()
+				cluster_type = line.strip().split("=")[1].strip().upper()
+				
+				if cluster_type not in ["SGE","LSF"]:
+					
+					print >> sys.stderr,"CLUSTER TYPE NOT RECOGNISED. PLEASE UPDATE CLUSTER.CONFIG.'nValue given: %s\nExpected either 'SGE' or 'LSF'"%(cfg_line_number,line)
+					sys.exit()
 			
+				
 			elif line.strip().startswith("cluster_submit"):   
 				cluster_data[line.strip().split("=")[0].strip()] = line.strip().split("=")[1].strip()
 			
@@ -1725,14 +1737,23 @@ def launch_script(paired,aligner_data,run_data,run_dirs,tag,local_copy,not_stric
 			
 			#print cluster_data["cluster_submit"],"-o","/home/hep/emmett/scripts/cluster/current_script/out.txt","-e","/home/hep/emmett/scripts/cluster/current_script/error.txt",cluster_data["queue_param"],run_data["cluster_queue"],cluster_data["mem_param"],'mem_free=%s'%(run_data["node_mem"]),bowtie_bash_script
 			
-			if cluster_type.upper() == "SGE" or cluster_type.upper() != "LSF":
+			if debug == True:
+					print "cluster_type", cluster_type
+					print cluster_data["cluster_type"]
+			
+			if cluster_data["cluster_type"] == "SGE":
+				
+				if debug == True:
+					print "RUNNING SGE"
 			
 				cluster_proc = subprocess.Popen([cluster_data["cluster_submit"],"-o",cluster_output_file,"-e",cluster_error_file,cluster_data["queue_param"],run_data["cluster_queue"],cluster_data["mem_param"],'mem_free=%s'%(run_data["node_mem"]),bowtie_bash_script],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 				count += 1
 				
 				cluster_lines.append([cluster_data["cluster_submit"],"-o",cluster_output_file,"-e",cluster_error_file,cluster_data["queue_param"],run_data["cluster_queue"],cluster_data["mem_param"],'mem_free=%s'%(run_data["node_mem"]),bowtie_bash_script])
 			
-			elif cluster_type.upper() == "LSF":
+			else:
+				if debug == True:
+					print "RUNNING LSF"
 				
 				clus_stat = [cluster_data["cluster_submit"],"-o",cluster_output_file,"-e",cluster_error_file,cluster_data["queue_param"],run_data["cluster_queue"],"bash",bowtie_bash_script]
 				
@@ -1793,12 +1814,16 @@ def launch_script(paired,aligner_data,run_data,run_dirs,tag,local_copy,not_stric
 				cluster_output_file =os.path.join(run_dirs["cluster_out_dir"],"%s.out"%(bowtie_bash_script)) 
 			
 			#print cluster_data["cluster_submit"],"-o","/home/hep/emmett/scripts/cluster/current_script/out.txt","-e","/home/hep/emmett/scripts/cluster/current_script/error.txt",cluster_data["queue_param"],run_data["cluster_queue"],cluster_data["mem_param"],'mem_free=%s'%(run_data["node_mem"]),bowtie_bash_script
-
-			cluster_proc = subprocess.Popen([bowtie_bash_script],stdout=open(cluster_output_file,"w"),stderr=open(cluster_error_file,"w"))
+			
+			if debug == True:
+				
+				print 'bowtie_bash_script',bowtie_bash_script
+			
+			cluster_proc = subprocess.Popen(["bash",bowtie_bash_script],stdout=open(cluster_output_file,"w"),stderr=open(cluster_error_file,"w"))
 			
 			
 			
-	
+			'''
 			if debug == True:
 				print 
 				print "STDout"
@@ -1811,7 +1836,7 @@ def launch_script(paired,aligner_data,run_data,run_dirs,tag,local_copy,not_stric
 				for line in cluster_proc.stderr:
 				    print line
 				
-	
+			'''
 		
 		
 	print >> sys.stderr,"[%s] All Jobs submitted successfully, %s Jobs at a time"%(time_now(),core_limit)
@@ -1902,7 +1927,7 @@ def manage_jobs(cluster_data,run_data,run_dirs,total_files,tag,job_name_list,bas
 		
 			
 			##### MANAGING STUFF MAKE A LSF VERSIN
-		if cluster_type == "SGE":
+		if cluster_data["cluster_type"] == "SGE":
 			total_jobs,numbers_not_present,names_jobs_present = queue_info_eqw(total_files,tag)
 		else:
 			total_jobs,numbers_not_present,names_jobs_present = queue_info_eqw_LSF(total_files,tag)
@@ -2102,7 +2127,7 @@ def manage_jobs(cluster_data,run_data,run_dirs,total_files,tag,job_name_list,bas
 							
 							print >> sys.stderr,"%s has exceeded the average run time by more than %s percent. Deleting and rerunning."%(job_1,extra_time)
 							
-							cluster_proc1 = subprocess.Popen(["qdel",jobname_dict[job_1]],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+							cluster_proc1 = subprocess.Popen([cluster_data["cluster_del_command"],jobname_dict[job_1]],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 							
 							
 							# change the time to the current time
